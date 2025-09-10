@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P通信チャット</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .status {
+            padding: 15px;
+            text-align: center;
+            font-weight: bold;
+            background: #f8f9fa;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .status.connected { background: #d4edda; color: #155724; }
+        .status.connecting { background: #fff3cd; color: #856404; }
+        .status.disconnected { background: #f8d7da; color: #721c24; }
+        
+        .connection-section {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        input, button, textarea {
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        
+        input {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background 0.3s;
+            white-space: nowrap;
+        }
+        
+        button:hover:not(:disabled) {
+            background: #45a049;
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .chat-section {
+            height: 400px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            border-radius: 18px;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+        
+        .message.sent {
+            background: #4CAF50;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+        
+        .message.received {
+            background: white;
+            border: 1px solid #ddd;
+        }
+        
+        .message-input {
+            display: flex;
+            padding: 20px;
+            gap: 10px;
+            border-top: 1px solid #ddd;
+        }
+        
+        .message-input input {
+            flex: 1;
+        }
+        
+        .offer-display {
+            margin-top: 15px;
+        }
+        
+        .offer-display textarea {
+            width: 100%;
+            height: 100px;
+            resize: vertical;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        .instructions {
+            background: #e3f2fd;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        @media (max-width: 600px) {
+            .input-group {
+                flex-direction: column;
+            }
+            
+            input, button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📱 P2P通信チャット</h1>
+            <p>WebRTCを使用したピアツーピア通信</p>
+        </div>
+        
+        <div class="status" id="status">未接続</div>
+        
+        <div class="connection-section">
+            <h3>接続設定</h3>
+            
+            <div class="instructions">
+                <strong>使用方法：</strong><br>
+                1. 「オファー作成」ボタンを押してオファーを生成<br>
+                2. 生成されたオファーを相手に送信<br>
+                3. 相手からのアンサーを「アンサー受信」欄に貼り付け<br>
+                または相手からのオファーを「オファー受信」欄に貼り付けてアンサー作成
+            </div>
+            
+            <div class="input-group">
+                <button id="createOffer">オファー作成</button>
+                <button id="createAnswer" disabled>アンサー作成</button>
+            </div>
+            
+            <div class="offer-display" id="offerDisplay" style="display: none;">
+                <label>生成されたオファー（これを相手に送信）:</label>
+                <textarea id="offerText" readonly></textarea>
+                <button onclick="copyToClipboard('offerText')">コピー</button>
+            </div>
+            
+            <div class="input-group">
+                <input type="text" id="remoteOffer" placeholder="相手からのオファーを貼り付け">
+                <button id="receiveOffer">オファー受信</button>
+            </div>
+            
+            <div class="input-group">
+                <input type="text" id="remoteAnswer" placeholder="相手からのアンサーを貼り付け">
+                <button id="receiveAnswer">アンサー受信</button>
+            </div>
+        </div>
+        
+        <div class="chat-section">
+            <div class="messages" id="messages"></div>
+            <div class="message-input">
+                <input type="text" id="messageInput" placeholder="メッセージを入力..." disabled>
+                <button id="sendMessage" disabled>送信</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class P2PChat {
+            constructor() {
+                this.pc = null;
+                this.dataChannel = null;
+                this.isConnected = false;
+                this.init();
+            }
+            
+            init() {
+                this.setupElements();
+                this.setupEventListeners();
+                this.updateStatus('未接続', 'disconnected');
+            }
+            
+            setupElements() {
+                this.statusEl = document.getElementById('status');
+                this.messagesEl = document.getElementById('messages');
+                this.messageInput = document.getElementById('messageInput');
+                this.sendBtn = document.getElementById('sendMessage');
+                this.createOfferBtn = document.getElementById('createOffer');
+                this.createAnswerBtn = document.getElementById('createAnswer');
+                this.receiveOfferBtn = document.getElementById('receiveOffer');
+                this.receiveAnswerBtn = document.getElementById('receiveAnswer');
+                this.offerDisplay = document.getElementById('offerDisplay');
+                this.offerText = document.getElementById('offerText');
+                this.remoteOfferInput = document.getElementById('remoteOffer');
+                this.remoteAnswerInput = document.getElementById('remoteAnswer');
+            }
+            
+            setupEventListeners() {
+                this.createOfferBtn.addEventListener('click', () => this.createOffer());
+                this.createAnswerBtn.addEventListener('click', () => this.createAnswer());
+                this.receiveOfferBtn.addEventListener('click', () => this.receiveOffer());
+                this.receiveAnswerBtn.addEventListener('click', () => this.receiveAnswer());
+                this.sendBtn.addEventListener('click', () => this.sendMessage());
+                this.messageInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.sendMessage();
+                });
+            }
+            
+            createPeerConnection() {
+                const config = {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                };
+                
+                this.pc = new RTCPeerConnection(config);
+                
+                this.pc.onicecandidate = (event) => {
+                    // ICE候補はオファー/アンサーに自動的に含まれます
+                };
+                
+                this.pc.onconnectionstatechange = () => {
+                    console.log('Connection state:', this.pc.connectionState);
+                    if (this.pc.connectionState === 'connected') {
+                        this.updateStatus('接続済み', 'connected');
+                        this.isConnected = true;
+                        this.enableChat();
+                    } else if (this.pc.connectionState === 'disconnected' || 
+                               this.pc.connectionState === 'failed') {
+                        this.updateStatus('切断', 'disconnected');
+                        this.isConnected = false;
+                        this.disableChat();
+                    }
+                };
+                
+                this.pc.ondatachannel = (event) => {
+                    const channel = event.channel;
+                    this.setupDataChannel(channel);
+                };
+            }
+            
+            setupDataChannel(channel) {
+                this.dataChannel = channel;
+                
+                channel.onopen = () => {
+                    console.log('Data channel opened');
+                    this.updateStatus('接続済み', 'connected');
+                    this.isConnected = true;
+                    this.enableChat();
+                };
+                
+                channel.onmessage = (event) => {
+                    this.displayMessage(event.data, 'received');
+                };
+                
+                channel.onclose = () => {
+                    console.log('Data channel closed');
+                    this.updateStatus('切断', 'disconnected');
+                    this.isConnected = false;
+                    this.disableChat();
+                };
+            }
+            
+            async createOffer() {
+                try {
+                    this.updateStatus('オファー作成中...', 'connecting');
+                    this.createPeerConnection();
+                    
+                    // データチャンネル作成
+                    this.dataChannel = this.pc.createDataChannel('chat');
+                    this.setupDataChannel(this.dataChannel);
+                    
+                    const offer = await this.pc.createOffer();
+                    await this.pc.setLocalDescription(offer);
+                    
+                    // ICE候補の収集を待つ
+                    await this.waitForIceGathering();
+                    
+                    const offerString = JSON.stringify(this.pc.localDescription);
+                    this.offerText.value = offerString;
+                    this.offerDisplay.style.display = 'block';
+                    
+                    this.updateStatus('オファー作成完了。相手のアンサーを待機中', 'connecting');
+                    this.createOfferBtn.disabled = true;
+                    
+                } catch (error) {
+                    console.error('Error creating offer:', error);
+                    this.updateStatus('オファー作成エラー', 'disconnected');
+                }
+            }
+            
+            async receiveOffer() {
+                const offerString = this.remoteOfferInput.value.trim();
+                if (!offerString) {
+                    alert('オファーを入力してください');
+                    return;
+                }
+                
+                try {
+                    this.updateStatus('オファー処理中...', 'connecting');
+                    this.createPeerConnection();
+                    
+                    const offer = JSON.parse(offerString);
+                    await this.pc.setRemoteDescription(offer);
+                    
+                    this.createAnswerBtn.disabled = false;
+                    this.receiveOfferBtn.disabled = true;
+                    this.updateStatus('オファー受信完了。アンサーを作成してください', 'connecting');
+                    
+                } catch (error) {
+                    console.error('Error receiving offer:', error);
+                    this.updateStatus('オファー処理エラー', 'disconnected');
+                }
+            }
+            
+            async createAnswer() {
+                try {
+                    this.updateStatus('アンサー作成中...', 'connecting');
+                    
+                    const answer = await this.pc.createAnswer();
+                    await this.pc.setLocalDescription(answer);
+                    
+                    // ICE候補の収集を待つ
+                    await this.waitForIceGathering();
+                    
+                    const answerString = JSON.stringify(this.pc.localDescription);
+                    this.offerText.value = answerString;
+                    this.offerDisplay.style.display = 'block';
+                    
+                    // ラベルを変更
+                    this.offerDisplay.querySelector('label').textContent = '生成されたアンサー（これを相手に送信）:';
+                    
+                    this.updateStatus('アンサー作成完了。接続を待機中', 'connecting');
+                    this.createAnswerBtn.disabled = true;
+                    
+                } catch (error) {
+                    console.error('Error creating answer:', error);
+                    this.updateStatus('アンサー作成エラー', 'disconnected');
+                }
+            }
+            
+            async receiveAnswer() {
+                const answerString = this.remoteAnswerInput.value.trim();
+                if (!answerString) {
+                    alert('アンサーを入力してください');
+                    return;
+                }
+                
+                try {
+                    this.updateStatus('アンサー処理中...', 'connecting');
+                    
+                    const answer = JSON.parse(answerString);
+                    await this.pc.setRemoteDescription(answer);
+                    
+                    this.receiveAnswerBtn.disabled = true;
+                    this.updateStatus('接続中...', 'connecting');
+                    
+                } catch (error) {
+                    console.error('Error receiving answer:', error);
+                    this.updateStatus('アンサー処理エラー', 'disconnected');
+                }
+            }
+            
+            waitForIceGathering() {
+                return new Promise((resolve) => {
+                    if (this.pc.iceGatheringState === 'complete') {
+                        resolve();
+                    } else {
+                        const checkState = () => {
+                            if (this.pc.iceGatheringState === 'complete') {
+                                this.pc.removeEventListener('icegatheringstatechange', checkState);
+                                resolve();
+                            }
+                        };
+                        this.pc.addEventListener('icegatheringstatechange', checkState);
+                    }
+                });
+            }
+            
+            sendMessage() {
+                const message = this.messageInput.value.trim();
+                if (!message || !this.isConnected) return;
+                
+                try {
+                    this.dataChannel.send(message);
+                    this.displayMessage(message, 'sent');
+                    this.messageInput.value = '';
+                } catch (error) {
+                    console.error('Error sending message:', error);
+                }
+            }
+            
+            displayMessage(message, type) {
+                const messageEl = document.createElement('div');
+                messageEl.className = `message ${type}`;
+                messageEl.textContent = message;
+                this.messagesEl.appendChild(messageEl);
+                this.messagesEl.scrollTop = this.messagesEl.scrollHeight;
+            }
+            
+            updateStatus(text, className) {
+                this.statusEl.textContent = text;
+                this.statusEl.className = `status ${className}`;
+            }
+            
+            enableChat() {
+                this.messageInput.disabled = false;
+                this.sendBtn.disabled = false;
+                this.messageInput.focus();
+            }
+            
+            disableChat() {
+                this.messageInput.disabled = true;
+                this.sendBtn.disabled = true;
+            }
+        }
+        
+        function copyToClipboard(elementId) {
+            const element = document.getElementById(elementId);
+            element.select();
+            element.setSelectionRange(0, 99999);
+            document.execCommand('copy');
+            
+            const button = event.target;
+            const originalText = button.textContent;
+            button.textContent = 'コピー完了!';
+            setTimeout(() => {
+                button.textContent = originalText;
+            }, 2000);
+        }
+        
+        // アプリ初期化
+        const chat = new P2PChat();
+    </script>
+</body>
+</html>
