@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Firebaseリアルタイム表示</title>
+  <script type="module">
+    // Firebase SDK 読み込み
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+
+    // 自分のFirebaseプロジェクト設定に差し替え
+const firebaseConfig = {
+  apiKey: "AIzaSyD1UVYDwGQ6islOPmHdL4MyXGSD2ydnDIE",
+  authDomain: "rinkai-ap.firebaseapp.com",
+  databaseURL: "https://rinkai-ap-default-rtdb.firebaseio.com",
+  projectId: "rinkai-ap",
+  storageBucket: "rinkai-ap.firebasestorage.app",
+  messagingSenderId: "831824648011",
+  appId: "1:831824648011:web:e210a89078fc274313face",
+  measurementId: "G-3T24ZB18PZ"
+};
+
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // "message" ノードを監視
+    const messageRef = ref(db, 'message');
+    onValue(messageRef, (snapshot) => {
+      const data = snapshot.val();
+      document.getElementById("output").innerText = data ?? "（未設定）";
+    });
+  </script>
+</head>
+<body>
+  <h2>サーバーレス・リアルタイムデータ</h2>
+  <div id="output">待機中...</div>
+</body>
+</html>
